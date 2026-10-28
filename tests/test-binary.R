@@ -16,8 +16,9 @@ stopifnot(length(files) >= 19L)
 for (f in files) {
   x <- read_jmp(f, metadata = "quiet")
   stopifnot(inherits(x, "jmp_dataset"), ncol(x$data) == length(x$columns),
-            all(lengths(x$data) == nrow(x$data)), is.null(x$rows),
-            "table_row_states_unavailable" %in% x$diagnostics$code,
+            all(lengths(x$data) == nrow(x$data)), nrow(x$rows) == nrow(x$data),
+            !any(x$rows$excluded),
+            !"table_row_states_unavailable" %in% x$diagnostics$code,
             identical(x$source$bytes, readBin(f, "raw", file.info(f)$size)))
 }
 
@@ -38,11 +39,13 @@ same(d$formula, c("2","4","6","8"))
 same(d$pressures, c(101.325,NA,2.6,4.63309e110))
 same(d[["char utf8"]], c("\ua66e\ua66e\ua66e","\U0001f6b4\U0001f4a8","j\u00e4\u00e4\u00e4\u00e4r","\u8f9b\u53e3"))
 same(d$charvariable8, c("a","bb","cc","abcdefghijkl"))
-stopifnot(identical(as.data.frame(x), d), !x$columns$ints$metadata_known$modeling_type,
-          !x$columns$ints$metadata_known$missing_value_codes)
+stopifnot(identical(as.data.frame(x), d), x$columns$ints$metadata_known$modeling_type,
+          x$columns$ints$modeling_type == "Continuous",
+          x$columns$ints$metadata_known$missing_value_codes,
+          is.null(x$columns$ints$missing_value_codes))
 expect_error_class(as_analysis_data(x, factors = TRUE), "jmp_metadata_error")
 expect_error_class(as_analysis_data(x, missing_codes = TRUE), "jmp_metadata_error")
-expect_error_class(as_analysis_data(x, exclude_rows = TRUE), "jmp_metadata_error")
+stopifnot(identical(as_analysis_data(x, exclude_rows = TRUE), x$data))
 
 x <- read_fixture("compressed.jmp")$data
 stopifnot(nrow(x) == 10000L, all(x$numeric == 1), all(x$character1 == "a"),
@@ -84,7 +87,7 @@ x <- read_fixture("rowstate.jmp")
 stopifnot(x$columns$rowstate3$row_states$marker[2] == "\u25b2",
           x$columns$rowstate3$row_states$marker[3] == "\ua66e",
           x$columns$rowstate2$row_states$color[3] == "#C0C0C0",
-          is.raw(x$columns$rowstate2$raw_row_states), is.null(x$rows))
+          is.raw(x$columns$rowstate2$raw_row_states), which(x$rows$selected) == 3L)
 x <- read_fixture("compact.jmp")$data
 same(x$normalsubtype,c("aa","b","ccc","dd","dd"))
 same(x$compactsubtype,c("aa","b","ccc","dd","dd"))

@@ -172,6 +172,7 @@
   saved <- readBin(c$take(8), "double", 1L, size = 8L, endian = "little")
   c$skip(2)
   build <- c$str(4)
+  table_header_offset <- c$pos
   c$pos <- 2
   repeat {
     c$until(as.raw(c(255, 255)))
@@ -192,6 +193,7 @@
     if (b[2] == 255 && b[1] %in% 252:255) c$skip(c$num(8, TRUE))
     else { c$pos <- c$pos - 2; break }
   }
+  column_index_offset <- c$pos
   if (c$num(4, TRUE) != nc) .jmp_corrupt("The two column counts disagree.")
   offsets <- vapply(seq_len(nc), function(i) c$num(8, TRUE), numeric(1))
   if (any(offsets < 0 | offsets >= length(bytes)) || any(diff(offsets) <= 0))
@@ -199,14 +201,57 @@
   names <- vapply(offsets, function(o) .jmp_cursor(bytes, o)$str(2), character(1))
   list(nrows = nr, ncols = nc, names = names, offsets = offsets, build = build,
        charset = charset, saved_jmp_seconds = saved, widths = widths,
-       visible_indices = visible_idx, hidden_indices = hidden_idx)
+       visible_indices = visible_idx, hidden_indices = hidden_idx,
+       table_header_offset = table_header_offset, column_index_offset = column_index_offset)
 }
 
-.jmp_properties <- function(bytes, after_dt, end) {
+.jmp_table_rows <- function(bytes, info) {
+  # Recognize the bounded table-property directory, never search for flag bytes
+  # in arbitrary scripts or column data. Unrecognized layouts remain unknown.
+  c <- .jmp_cursor(bytes, info$table_header_offset)
+  end <- info$column_index_offset
+  if (end - c$pos < 20) return(NULL)
+  if (c$num(2) != 5 || c$num(4) != 4) return(NULL)
+  c$skip(4)
+  if (.jmp_uint(.jmp_slice(bytes, c$pos, 2), 2) == 31) {
+    c$skip(2)
+    size <- c$num(4)
+    if (size > end - c$pos - 10) return(NULL)
+    c$skip(size)
+  }
+  count <- c$num(2)
+  total <- c$num(8)
+  if (c$pos + total != end || count * 10 > total) return(NULL)
+  state <- NULL
+  seen <- integer()
+  for (i in seq_len(count)) {
+    if (end - c$pos < 10) return(NULL)
+    id <- c$num(2)
+    size <- c$num(8)
+    if (size > end - c$pos || id %in% seen) return(NULL)
+    seen <- c(seen, id)
+    if (id == 16) {
+      # Each stored row state has eight bytes: color (4), flags (1),
+      # marker (2), and a reserved byte (1). Other layouts remain unknown.
+      if (size != info$nrows * 8) return(NULL)
+      state <- c$take(size)
+    } else c$skip(size)
+  }
+  if (c$pos != end || !65535 %in% seen) return(NULL)
+  flags <- if (is.null(state)) rep(0L, info$nrows) else
+    as.integer(state[seq.int(5, length.out = info$nrows, by = 8)])
+  data.frame(row_id = seq_len(info$nrows),
+             excluded = bitwAnd(flags, 2L) != 0L,
+             hidden = bitwAnd(flags, 4L) != 0L,
+             selected = bitwAnd(flags, 1L) != 0L,
+             labelled = bitwAnd(flags, 8L) != 0L)
+}
+
+.jmp_properties <- function(bytes, after_dt, end, padding = 4) {
   # This block is only one known header layout. Failure is reported as unknown.
   tryCatch({
     c <- .jmp_cursor(bytes, after_dt)
-    c$skip(4)
+    c$skip(padding)
     n <- c$num(2)
     total <- c$num(8)
     if (c$pos + total > end || n * 10 > total) return(NULL)
@@ -218,8 +263,71 @@
       list(id = id, payload = c$take(size))
     })
     if (c$pos - start != total) return(NULL)
+    if (anyDuplicated(vapply(out, function(p) p$id, numeric(1)))) return(NULL)
+    attr(out, "end_offset") <- c$pos
     out
   }, error = function(e) NULL)
+}
+
+.jmp_column_attributes <- function(bytes, pos, end) {
+  if (is.null(pos)) return(NULL)
+  tryCatch({
+    c <- .jmp_cursor(bytes, pos)
+    n <- c$num(2)
+    total <- c$num(4)
+    if (total > end - c$pos || n * 6 > total) return(NULL)
+    stop_at <- c$pos + total
+    out <- list()
+    for (i in seq_len(n)) {
+      if (stop_at - c$pos < 6) return(NULL)
+      id <- as.character(c$num(2))
+      size <- c$num(4)
+      if (size > stop_at - c$pos || id %in% names(out)) return(NULL)
+      out[[id]] <- c$take(size)
+    }
+    if (c$pos != stop_at) return(NULL)
+    out
+  }, error = function(e) NULL)
+}
+
+.jmp_literal_column_properties <- function(props, character_column) {
+  # Property 7 is an inert length-prefixed JSL property expression, not code
+  # to execute. Only complete literal missing-code/value-order declarations
+  # are interpreted. Anything else leaves these properties unknown.
+  unknown <- list(known = FALSE)
+  if (is.null(props)) return(unknown)
+  found <- Filter(function(p) p$id == 7, props)
+  empty <- list(known = TRUE, missing_value_codes = NULL, value_order = NULL)
+  if (!length(found)) return(empty)
+  if (length(found) != 1L) return(unknown)
+  tryCatch({
+    b <- found[[1]]$payload
+    c <- .jmp_cursor(b)
+    nodes <- list()
+    repeat {
+      size <- c$num(4, TRUE)
+      if (size == -1) break
+      if (size < 0 || size > length(b) - c$pos) return(unknown)
+      nodes <- c(nodes, .jrp_parse(.jmp_utf8(c$take(size))))
+    }
+    if (c$pos != length(b)) return(unknown)
+    names <- vapply(nodes, function(node) {
+      if (node$kind != "call") return("")
+      .jrp_name(node$value)
+    }, "")
+    if (anyDuplicated(names) || any(!names %in% c("missingvaluecodes", "valueorder"))) return(unknown)
+    out <- empty
+    for (i in seq_along(nodes)) {
+      node <- nodes[[i]]
+      if (length(node$args) != 1L || !node$args[[1]]$kind %in% c("list", "matrix")) return(unknown)
+      value <- .jrp_literal(node$args[[1]])
+      if (!length(value)) value <- NULL
+      else if (anyNA(value) || (character_column && !is.character(value)) ||
+               (!character_column && !is.numeric(value))) return(unknown)
+      out[[if (names[i] == "missingvaluecodes") "missing_value_codes" else "value_order"]] <- value
+    }
+    out
+  }, error = function(e) unknown)
 }
 
 .jmp_null_strings <- function(x, n) {
@@ -340,7 +448,8 @@
   name <- c$str(2)
   dt <- as.integer(c$take(6))
   after <- c$pos
-  props <- .jmp_properties(bytes, after, end)
+  props <- .jmp_properties(bytes, after, end, if (dt[1] %in% c(1, 10)) 5 else 4)
+  attrs <- .jmp_column_attributes(bytes, attr(props, "end_offset"), end)
   compressed <- dt[1] %in% c(9, 10)
   if (compressed) {
     c$until(as.raw(c(239, 190, 254, 202)))
@@ -365,6 +474,13 @@
                                      value_order = FALSE, value_labels = !is.null(props),
                                      units = FALSE, formula = FALSE))
   extra <- character()
+  if (length(attrs[["23"]]) == 2L) {
+    code <- .jmp_uint(attrs[["23"]], 2)
+    if (code %in% 0:3) {
+      meta$modeling_type <- c("Continuous", "Ordinal", "Nominal", "RowState")[code + 1L]
+      meta$metadata_known$modeling_type <- TRUE
+    }
+  }
   if (dt[1] %in% c(1, 10, 255, 254, 252)) {
     w <- width(if (dt[1] %in% c(255, 254, 252)) dt[5] else dt[6])
     v <- .jmp_numbers(a, w, n)
@@ -478,11 +594,26 @@
         .jmp_abort(paste("Cannot decode value labels in", name, ":", conditionMessage(e)), "jmp_unsupported_error")
       })
   }
+  literal <- if (is.null(attrs)) list(known = FALSE) else
+    .jmp_literal_column_properties(props, identical(meta$storage_type, "Character"))
+  if (isTRUE(literal$known)) {
+    meta$missing_value_codes <- literal$missing_value_codes
+    meta$value_order <- literal$value_order
+    meta$metadata_known$missing_value_codes <- TRUE
+    meta$metadata_known$value_order <- TRUE
+  }
+  if (!meta$metadata_known$modeling_type)
+    extra <- c(extra, "Modeling type is unavailable or unsupported; it was not inferred from storage type.")
+  if (!meta$metadata_known$missing_value_codes)
+    extra <- c(extra, "Missing-value definitions and value order could not be fully interpreted; no absence was assumed.")
+  if (identical(meta$modeling_type, "Ordinal") && !length(meta$value_order))
+    extra <- c(extra, "Ordinal modeling type is retained, but category order is not explicit; ordered-factor conversion will not guess an order.")
   list(values = v, metadata = meta, messages = extra)
 }
 
 .read_jmp_binary <- function(bytes, max_cells = 1e7) {
   info <- .jmp_header(bytes, max_cells)
+  rows <- .jmp_table_rows(bytes, info)
   budget <- new.env(parent = emptyenv())
   budget$remaining <- 536870912
   columns <- lapply(seq_len(info$ncols), function(i) .jmp_read_column(bytes, info, i, max_cells, budget))
@@ -491,14 +622,15 @@
   data <- structure(data, class = "data.frame", row.names = .set_row_names(info$nrows))
   meta <- lapply(columns, `[[`, "metadata")
   names(meta) <- info$names
-  diagnostics <- data.frame(code = c("binary_metadata_partial", "table_row_states_unavailable"),
-    scope = c("table", "rows"),
-    message = c("Binary reader retains known storage, format and value-label metadata plus raw column properties. Modeling types, units, missing-value definitions, formulas and table scripts are not yet decoded; absence must not be inferred.",
-                "Table-level exclusion, hidden and selection states are not decoded. Row-state columns, if present, are separate from table-level row states."),
+  diagnostics <- data.frame(code = "binary_metadata_partial", scope = "table",
+    message = "Binary reader retains supported modeling types, literal missing-code definitions, storage, format and value-label metadata. Units, formulas, table scripts and other properties are not fully decoded; check each column's metadata_known flags.",
     stringsAsFactors = FALSE)
+  if (is.null(rows)) diagnostics <- rbind(diagnostics, data.frame(
+    code = "table_row_states_unavailable", scope = "rows",
+    message = "Table row-state layout is unsupported. Exclusion, hidden and selection states are unknown; row-state columns are separate."))
   for (i in seq_along(columns)) for (m in columns[[i]]$messages)
     diagnostics <- rbind(diagnostics, data.frame(code = "representation", scope = info$names[i], message = m, stringsAsFactors = FALSE))
-  list(data = data, columns = meta, rows = NULL,
+  list(data = data, columns = meta, rows = rows,
        table = info[c("build", "charset", "saved_jmp_seconds", "nrows", "ncols", "visible_indices", "hidden_indices")],
        scripts = list(), diagnostics = diagnostics)
 }
@@ -906,7 +1038,45 @@
   bytes
 }
 
-.jmp_finish <- function(result, path, bytes, keep_source, metadata) {
+.jmp_filter_rows <- function(result, exclude_rows) {
+  n <- nrow(result$data)
+  result$table$source_nrows <- n
+  result$table$excluded_rows_removed <- integer()
+  result$table$exclude_rows <- exclude_rows
+  if (exclude_rows) {
+    flags <- result$rows$excluded
+    if (is.null(flags) || !is.logical(flags) || length(flags) != n || anyNA(flags))
+      .jmp_abort(paste0("Row exclusion metadata is unavailable; cannot safely remove excluded rows. ",
+                       "Use exclude_rows = FALSE to explicitly read all rows."), "jmp_metadata_error")
+    keep <- !flags
+    result$table$excluded_rows_removed <- result$rows$row_id[flags]
+    if (any(flags)) {
+      result$data <- result$data[keep, , drop = FALSE]
+      rownames(result$data) <- NULL
+      result$rows <- result$rows[keep, , drop = FALSE]
+      rownames(result$rows) <- NULL
+      for (i in seq_along(result$columns)) {
+        m <- result$columns[[i]]
+        if (!is.null(m$raw_values)) m$raw_values <- m$raw_values[keep]
+        if (!is.null(m$row_states)) {
+          m$row_states <- m$row_states[keep, , drop = FALSE]
+          rownames(m$row_states) <- NULL
+        }
+        if (!is.null(m$raw_row_states)) {
+          width <- as.integer(m$type_bytes[5])
+          if (length(m$raw_row_states) != n * width)
+            .jmp_abort("Row-state column metadata cannot be aligned after filtering.", "jmp_corrupt_error")
+          m$raw_row_states <- as.raw(matrix(m$raw_row_states, nrow = width)[, keep, drop = FALSE])
+        }
+        result$columns[[i]] <- m
+      }
+    }
+  }
+  result$table$returned_nrows <- nrow(result$data)
+  result
+}
+
+.jmp_finish <- function(result, path, bytes, keep_source, metadata, exclude_rows) {
   if (!is.data.frame(result$data) || length(result$columns) != ncol(result$data))
     .jmp_abort("Reader returned inconsistent column metadata.", "jmp_corrupt_error")
   if (!is.null(result$rows) && nrow(result$rows) != nrow(result$data))
@@ -916,8 +1086,9 @@
                                      message = character(), stringsAsFactors = FALSE)
   if (is.null(result$scripts)) result$scripts <- list()
   if (is.null(result$table)) result$table <- list()
+  result <- .jmp_filter_rows(result, exclude_rows)
   result$source <- list(file = basename(path), size = length(bytes),
-                        reader = "jmp2r", version = "0.1.0", backend = "base-R")
+                        reader = "jmp2r", version = "0.2.0", backend = "base-R")
   if (keep_source) result$source$bytes <- bytes
   class(result) <- "jmp_dataset"
   if (nrow(result$diagnostics)) {
@@ -934,19 +1105,23 @@
 }
 
 read_jmp <- function(path, metadata = c("warn", "error", "quiet"),
-                     keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7) {
+                     keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
+                     exclude_rows = TRUE) {
   metadata <- match.arg(metadata)
+  exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
   max_cells <- .jmp_limit(max_cells, "max_cells")
   bytes <- .jmp_read_bytes(path, max_bytes)
   result <- .read_jmp_binary(bytes, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
 }
 
 read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
-                     keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7) {
+                     keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
+                     exclude_rows = TRUE) {
   metadata <- match.arg(metadata)
+  exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
   max_cells <- .jmp_limit(max_cells, "max_cells")
@@ -962,7 +1137,7 @@ read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
     .jmp_abort("JRP text is not valid UTF-8.", "jrp_syntax_error")
   Encoding(text) <- "UTF-8"
   result <- .read_jrp_text(text, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
 }
 
 read_jmp_file <- function(path, ...) {
@@ -1005,13 +1180,15 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
   missing_codes <- .jmp_flag(missing_codes, "missing_codes")
   factors <- .jmp_flag(factors, "factors")
   d <- x$data
+  kept <- rep(TRUE, nrow(d))
   if (exclude_rows) {
     if (is.null(x$rows) || is.null(x$rows$excluded) || anyNA(x$rows$excluded))
       .jmp_abort("Row exclusion metadata is unavailable; cannot apply exclude_rows=TRUE.",
                  "jmp_metadata_error")
     if (!is.logical(x$rows$excluded) || length(x$rows$excluded) != nrow(d))
       .jmp_abort("Invalid row exclusion metadata.", "jmp_metadata_error")
-    d <- d[!x$rows$excluded, , drop = FALSE]
+    kept <- !x$rows$excluded
+    d <- d[kept, , drop = FALSE]
   }
   for (i in seq_along(d)) {
     m <- x$columns[[i]]
@@ -1020,7 +1197,15 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
         .jmp_abort(paste0("Missing-value definitions are unavailable for column '",
                            names(d)[i], "'."), "jmp_metadata_error")
       codes <- m$missing_value_codes
-      if (length(codes)) d[[i]][d[[i]] %in% codes] <- NA
+      if (length(codes)) {
+        stored <- d[[i]]
+        if (!is.null(m$raw_values)) {
+          if (length(m$raw_values) != nrow(x$data))
+            .jmp_abort("Stored values do not align with the data rows.", "jmp_metadata_error")
+          stored <- m$raw_values[kept]
+        }
+        d[[i]][stored %in% codes] <- NA
+      }
     }
     if (factors) {
       if (!.jmp_known(m, "modeling_type") || length(m$modeling_type) != 1L ||

@@ -7,10 +7,12 @@
 subset of embedded-data JRP scripts. No JSL is executed.}
 \usage{
 read_jmp(path, metadata = c("warn", "error", "quiet"),
-  keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7)
+  keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
+  exclude_rows = TRUE)
 
 read_jrp(path, metadata = c("warn", "error", "quiet"),
-  keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7)
+  keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
+  exclude_rows = TRUE)
 
 read_jmp_file(path, ...)
 }
@@ -22,6 +24,10 @@ an error, or return quietly. Quiet does not allow undecodable data or unsafe JRP
 preserves an archival copy, not a promise that all metadata was decoded.}
 \item{max_bytes}{Maximum input file size in bytes, a positive whole number.}
 \item{max_cells}{Maximum number of cells, and maximum individual dimension.}
+\item{exclude_rows}{Remove JMP-excluded rows from returned data (default TRUE).
+Unknown exclusion metadata causes an error even with quiet diagnostics.
+Set FALSE explicitly to retain all stored rows. Hidden or selected rows alone
+are not removed. Original source bytes, when kept, still contain all rows.}
 \item{...}{Arguments passed to \code{read_jmp()} or \code{read_jrp()}.}
 }
 \value{A \code{jmp_dataset} list containing \code{data} (a data frame),
@@ -39,9 +45,13 @@ accepted. External file references, dynamic statements, and unsupported
 trailing report code fail. A formula is retained as text only when the stored
 values are also supplied. General JMP reports are not supported.
 
-Ordinary data frame operations do not apply JMP exclusion flags, missing codes,
-or modeling types. Use \code{as_analysis_data()} with explicit options, and
-keep the original \code{jmp_dataset} for its metadata.
+Excluded rows are removed at import by default. \code{rows$row_id} maps each
+returned row to its original one-based position; \code{table$source_nrows},
+\code{table$returned_nrows} and \code{table$excluded_rows_removed} record the
+filtering. Per-row interpreted column metadata stays aligned with returned data.
+The original file is not modified. Missing codes and modeling types are retained
+as metadata; use \code{as_analysis_data()} with explicit options to apply them.
+Ordinal conversion requires explicit category order and never guesses it.
 
 Errors inherit from \code{jmp_error}; metadata warnings inherit from
 \code{jmp_metadata_warning}. Input limits bound basic allocations but are not

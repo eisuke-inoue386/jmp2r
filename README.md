@@ -4,7 +4,7 @@ Read supported JMP `.jmp` data tables directly in R, without JMP, Python,
 Julia, or a compiler. Includes a **non-executing, restricted** reader for
 literal embedded tables in `.jrp` files.
 
-**Experimental 0.1.0.** The binary format is undocumented. This is not an
+**Experimental 0.2.0.** The binary format is undocumented. This is not an
 official JMP product, a universal JMP reader, or a lossless semantic converter.
 See [日本語の説明](README.ja.md), [validation](VALIDATION.md), and
 [publication instructions](PUBLISHING.md).
@@ -16,13 +16,13 @@ R 4.1 or newer is required. The package has no third-party R dependencies.
 From the supplied source archive:
 
 ```r
-install.packages("jmp2r_0.1.0.tar.gz", repos = NULL, type = "source")
+install.packages("jmp2r_0.2.0.tar.gz", repos = NULL, type = "source")
 ```
 
 On Windows, the supplied R binary package can also be installed:
 
 ```r
-install.packages("jmp2r_0.1.0.zip", repos = NULL, type = "win.binary")
+install.packages("jmp2r_0.2.0.zip", repos = NULL, type = "win.binary")
 ```
 
 From GitHub:
@@ -81,11 +81,29 @@ The return value is a `jmp_dataset` list:
 | `source` | Reader version, file basename, size, and original bytes by default |
 
 `read_jmp_file()` dispatches on `.jmp`/`.jrp`. `as.data.frame(x)` extracts
-the data without applying JMP analysis settings. `jmp_metadata(x)` returns
+the returned data without further transformations. `jmp_metadata(x)` returns
 the other components. Original bytes may include paths or embedded scripts;
 they are retained locally and never executed or uploaded. Use
 `keep_source = FALSE` to omit them. Keeping bytes is archival preservation,
 not evidence that their contents were understood.
+
+## Excluded rows (default: remove)
+
+Since 0.2.0, `read_jmp()`, `read_jrp()` and `read_jmp_file()` default to
+`exclude_rows = TRUE`. Only rows flagged **excluded** are removed. Selection,
+labeling or hiding alone does not remove a row. To retain all stored rows:
+
+```r
+x <- read_jmp_file("my-data.jmp", exclude_rows = FALSE)
+```
+
+`x$rows$row_id` contains original one-based row positions. The fields
+`x$table$source_nrows`, `x$table$returned_nrows` and
+`x$table$excluded_rows_removed` record the import counts and removed positions.
+Interpreted per-row metadata stays aligned with the returned data. The original
+file is not modified; `x$source$bytes`, if retained, still contains all rows.
+Unsupported exclusion metadata stops the default read even with
+`metadata = "quiet"`; opt into `exclude_rows = FALSE` to read all rows explicitly.
 
 ## Binary `.jmp` support
 
@@ -100,8 +118,10 @@ not evidence that their contents were understood.
 | Value labels | Decoded where the known property layout is recognized; original codes retained |
 | Display formats | Raw format codes and known widths retained, not rendered as JMP displays them |
 | Row-state **columns** | Marker/color decoded, raw state bytes retained |
-| Table-wide exclusion/hidden/selection flags | **Not decoded**, `rows = NULL` |
-| Modeling type, units, missing-value definitions, category order, formulas, table scripts | **Not decoded semantically**; retain available raw property payloads and source bytes |
+| Table-wide exclusion/hidden/selection/label flags | Decoded for the supported property directory and eight-byte row-state layout; excluded rows removed by default |
+| Modeling type | Supported Continuous/Nominal/Ordinal/RowState attributes retained in column metadata |
+| Missing-value definitions and category order | Complete literal `Missing Value Codes` / `Value Order` property lists decoded without execution; complex/unknown lists remain unknown |
+| Units, formulas, table scripts, other properties | Not fully decoded; retain available raw property payloads and source bytes |
 
 Unknown data layouts fail. Unknown metadata is diagnosed. Do not infer that
 missing metadata means a property was absent in JMP. `metadata = "quiet"`
@@ -152,10 +172,11 @@ d <- as_analysis_data(x, exclude_rows = TRUE,
                       missing_codes = TRUE, factors = TRUE)
 ```
 
-Defaults apply no transformations. Requested transformations fail when metadata
-is unavailable. Binary `.jmp` modeling types, exclusion flags, and missing-value
-definitions currently are unavailable, so the corresponding options stop.
-For supported literal JRP tables, nominal/ordinal information is available.
+`as_analysis_data()` defaults apply no additional transformations; excluded
+rows have already been removed unless disabled at import. Requested
+transformations fail when necessary metadata is unavailable. Use
+`as_analysis_data(x, missing_codes = TRUE)` to turn known missing codes into
+`NA` while keeping the original returned values in `x$data`.
 Ordinal conversion requires explicit `Value Order`; duplicate display labels
 that would merge distinct codes cause an error. The original object is unchanged.
 
@@ -163,7 +184,7 @@ that would merge distinct codes cause an error. The original object is unchanged
 
 ```sh
 R CMD build .
-R CMD check --no-manual jmp2r_0.1.0.tar.gz
+R CMD check --no-manual jmp2r_0.2.0.tar.gz
 ```
 
 Tests use base R. The GitHub workflow runs on Windows, macOS and Linux after

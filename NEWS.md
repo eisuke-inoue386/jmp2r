@@ -1,3 +1,15 @@
+# jmp2r 0.2.0
+
+- Readers now default to `exclude_rows = TRUE`. Supported JMP table exclusion
+  flags remove only excluded rows; set FALSE to retain all rows. Unknown
+  exclusion metadata stops the default read instead of silently keeping rows.
+- Preserve original row IDs, removal indices, source/returned row counts and
+  alignment of per-row column metadata. Source files are never modified.
+- Decode supported binary modeling-type attributes and literal missing-code
+  and value-order properties without executing JSL. Ordinal category order
+  is never inferred when unspecified.
+- Keep the standalone `jmp2r.R` distribution synchronized with these changes.
+
 # jmp2r 0.1.0
 
 - Initial pure-R, JMP-independent reader for supported binary data tables.

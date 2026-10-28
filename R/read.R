@@ -38,7 +38,45 @@
   bytes
 }
 
-.jmp_finish <- function(result, path, bytes, keep_source, metadata) {
+.jmp_filter_rows <- function(result, exclude_rows) {
+  n <- nrow(result$data)
+  result$table$source_nrows <- n
+  result$table$excluded_rows_removed <- integer()
+  result$table$exclude_rows <- exclude_rows
+  if (exclude_rows) {
+    flags <- result$rows$excluded
+    if (is.null(flags) || !is.logical(flags) || length(flags) != n || anyNA(flags))
+      .jmp_abort(paste0("Row exclusion metadata is unavailable; cannot safely remove excluded rows. ",
+                       "Use exclude_rows = FALSE to explicitly read all rows."), "jmp_metadata_error")
+    keep <- !flags
+    result$table$excluded_rows_removed <- result$rows$row_id[flags]
+    if (any(flags)) {
+      result$data <- result$data[keep, , drop = FALSE]
+      rownames(result$data) <- NULL
+      result$rows <- result$rows[keep, , drop = FALSE]
+      rownames(result$rows) <- NULL
+      for (i in seq_along(result$columns)) {
+        m <- result$columns[[i]]
+        if (!is.null(m$raw_values)) m$raw_values <- m$raw_values[keep]
+        if (!is.null(m$row_states)) {
+          m$row_states <- m$row_states[keep, , drop = FALSE]
+          rownames(m$row_states) <- NULL
+        }
+        if (!is.null(m$raw_row_states)) {
+          width <- as.integer(m$type_bytes[5])
+          if (length(m$raw_row_states) != n * width)
+            .jmp_abort("Row-state column metadata cannot be aligned after filtering.", "jmp_corrupt_error")
+          m$raw_row_states <- as.raw(matrix(m$raw_row_states, nrow = width)[, keep, drop = FALSE])
+        }
+        result$columns[[i]] <- m
+      }
+    }
+  }
+  result$table$returned_nrows <- nrow(result$data)
+  result
+}
+
+.jmp_finish <- function(result, path, bytes, keep_source, metadata, exclude_rows) {
   if (!is.data.frame(result$data) || length(result$columns) != ncol(result$data))
     .jmp_abort("Reader returned inconsistent column metadata.", "jmp_corrupt_error")
   if (!is.null(result$rows) && nrow(result$rows) != nrow(result$data))
@@ -48,8 +86,9 @@
                                      message = character(), stringsAsFactors = FALSE)
   if (is.null(result$scripts)) result$scripts <- list()
   if (is.null(result$table)) result$table <- list()
+  result <- .jmp_filter_rows(result, exclude_rows)
   result$source <- list(file = basename(path), size = length(bytes),
-                        reader = "jmp2r", version = "0.1.0", backend = "base-R")
+                        reader = "jmp2r", version = "0.2.0", backend = "base-R")
   if (keep_source) result$source$bytes <- bytes
   class(result) <- "jmp_dataset"
   if (nrow(result$diagnostics)) {
@@ -66,19 +105,23 @@
 }
 
 read_jmp <- function(path, metadata = c("warn", "error", "quiet"),
-                     keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7) {
+                     keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
+                     exclude_rows = TRUE) {
   metadata <- match.arg(metadata)
+  exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
   max_cells <- .jmp_limit(max_cells, "max_cells")
   bytes <- .jmp_read_bytes(path, max_bytes)
   result <- .read_jmp_binary(bytes, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
 }
 
 read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
-                     keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7) {
+                     keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
+                     exclude_rows = TRUE) {
   metadata <- match.arg(metadata)
+  exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
   max_cells <- .jmp_limit(max_cells, "max_cells")
@@ -94,7 +137,7 @@ read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
     .jmp_abort("JRP text is not valid UTF-8.", "jrp_syntax_error")
   Encoding(text) <- "UTF-8"
   result <- .read_jrp_text(text, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
 }
 
 read_jmp_file <- function(path, ...) {
@@ -137,13 +180,15 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
   missing_codes <- .jmp_flag(missing_codes, "missing_codes")
   factors <- .jmp_flag(factors, "factors")
   d <- x$data
+  kept <- rep(TRUE, nrow(d))
   if (exclude_rows) {
     if (is.null(x$rows) || is.null(x$rows$excluded) || anyNA(x$rows$excluded))
       .jmp_abort("Row exclusion metadata is unavailable; cannot apply exclude_rows=TRUE.",
                  "jmp_metadata_error")
     if (!is.logical(x$rows$excluded) || length(x$rows$excluded) != nrow(d))
       .jmp_abort("Invalid row exclusion metadata.", "jmp_metadata_error")
-    d <- d[!x$rows$excluded, , drop = FALSE]
+    kept <- !x$rows$excluded
+    d <- d[kept, , drop = FALSE]
   }
   for (i in seq_along(d)) {
     m <- x$columns[[i]]
@@ -152,7 +197,15 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
         .jmp_abort(paste0("Missing-value definitions are unavailable for column '",
                            names(d)[i], "'."), "jmp_metadata_error")
       codes <- m$missing_value_codes
-      if (length(codes)) d[[i]][d[[i]] %in% codes] <- NA
+      if (length(codes)) {
+        stored <- d[[i]]
+        if (!is.null(m$raw_values)) {
+          if (length(m$raw_values) != nrow(x$data))
+            .jmp_abort("Stored values do not align with the data rows.", "jmp_metadata_error")
+          stored <- m$raw_values[kept]
+        }
+        d[[i]][stored %in% codes] <- NA
+      }
     }
     if (factors) {
       if (!.jmp_known(m, "modeling_type") || length(m$modeling_type) != 1L ||

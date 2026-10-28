@@ -17,9 +17,10 @@ factors. A known explicit Value Order is required for ordinal columns.}
 \value{A data frame.}
 \details{
 Defaults return the stored data. When requested metadata is unavailable, this
-function stops rather than guessing. In particular, the current binary reader
-does not decode table-wide row exclusions or modeling types, so these options
-normally require a supported embedded JRP table or deliberately supplied metadata.
+function stops rather than guessing. Readers remove excluded rows by default;
+use \code{exclude_rows = FALSE} at import to retain them for later filtering.
+Supported binary layouts provide row flags, modeling types and literal missing
+codes. More complex properties can remain unknown, as indicated in the metadata.
 
 Nominal levels without an explicit order follow first occurrence. Stored value
 labels are used as factor labels, but duplicate labels that would merge different

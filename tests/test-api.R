@@ -22,11 +22,15 @@ expect_error_class(read_jmp("https://example.invalid/data.jmp"), "jmp_argument_e
 expect_error_class(read_jmp("a-file-that-does-not-exist.jmp"), "jmp_io_error")
 expect_error_class(read_jmp_file("wrong.txt"), "jmp_argument_error")
 expect_error_class(read_jmp_file(character()), "jmp_argument_error")
-expect_error_class(as_analysis_data(x, exclude_rows = TRUE), "jmp_metadata_error")
+stopifnot(identical(as_analysis_data(x, exclude_rows = TRUE), x$data))
+expect_error_class(read_jmp(path, exclude_rows = NA), "jmp_argument_error")
 expect_error_class(as_analysis_data(x, factors = TRUE), "jmp_metadata_error")
 expect_error_class(as_analysis_data(x, missing_codes = TRUE), "jmp_metadata_error")
 stopifnot(is.null(read_jmp(path, metadata = "quiet", keep_source = FALSE)$source$bytes))
 stopifnot(identical(read_jmp_file(path, metadata = "quiet")$data, x$data))
+unknown_rows <- x
+unknown_rows$rows <- NULL
+expect_error_class(as_analysis_data(unknown_rows, exclude_rows = TRUE), "jmp_metadata_error")
 saved <- tempfile(fileext = ".rds")
 saveRDS(x, saved)
 stopifnot(identical(readRDS(saved), x))

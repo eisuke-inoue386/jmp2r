@@ -16,8 +16,9 @@ jmp_metadata(x)
 \item{...}{Additional print arguments; ignored by data frame extraction.}
 }
 \value{\code{jmp_metadata()} returns metadata components as a list.
-\code{as.data.frame()} returns stored data without applying JMP analysis
-settings. \code{print()} returns its input invisibly.}
+\code{as.data.frame()} returns the data already filtered according to the
+reader's \code{exclude_rows} option, without further transformations.
+\code{print()} returns its input invisibly.}
 \details{Column metadata is indexed by position, even when names are duplicated.
 The \code{metadata_known} flags distinguish unavailable information from
 known-absent properties. Keep the whole object with \code{saveRDS()} to preserve

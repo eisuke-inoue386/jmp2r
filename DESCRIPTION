@@ -1,7 +1,7 @@
 Package: jmp2r
 Type: Package
 Title: Read JMP Data Tables Without JMP
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: c(
     person("jmp2r contributors", role = "aut"),
     person("eisuke-inoue386", role = "cre",

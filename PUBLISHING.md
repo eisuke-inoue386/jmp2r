@@ -31,7 +31,7 @@ alone does not substitute for those platform checks.
 
 ```sh
 R CMD build --no-build-vignettes .
-R CMD check --no-manual jmp2r_0.1.0.tar.gz
+R CMD check --no-manual jmp2r_0.2.0.tar.gz
 ```
 
 For a release, tag the verified commit and create a GitHub Release. Attach a
