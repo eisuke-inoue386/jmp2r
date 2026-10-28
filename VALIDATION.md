@@ -8,8 +8,8 @@ Publication check: 2026-10-28 (Asia/Tokyo).
 - Windows 11 x64, R 4.6.1, UTF-8 locale.
 - `R CMD build --no-build-vignettes`: passed.
 - `R CMD check --no-manual`: **Status: OK**.
-- Five test scripts cover the API, binary values, JRP, row/column metadata,
-  and default import conversions.
+- Six test scripts cover the API, binary values, JRP, row/column metadata,
+  default import conversions and plain-data output.
 - The Windows binary ZIP installed into a separate clean library, with MD5
   verification and public `.jmp`/`.jrp`/analysis-conversion smoke tests passing.
 - No third-party R package or JMP installation was used.
@@ -87,6 +87,18 @@ tests; the essential regression cases are included in the test suite.
 - The local owner-supplied table was rechecked for nominal factors, an ordered
   factor using R sorting, and conversion of the declared missing code to NA.
   The file remains local and is not part of the public test suite.
+
+## 0.4.0 plain-data output (2026-10-28)
+
+- Default output is a native data frame; tests cover direct column access,
+  dimensions, factors, missing values, ordinary R summaries and serialization.
+- Data columns named `data`, `source` and `diagnostics` are ordinary columns;
+  import notes are stored separately as an attribute, without naming collisions.
+- Plain-data output retains only import diagnostics, not source bytes or
+  detailed metadata. Irrelevant unsupported-feature notes are omitted, while
+  inferred ordinal order remains visible and can trigger metadata='error'.
+- Existing decoder/conversion suites exercise `output = "dataset"` explicitly
+  to verify the earlier detailed interface as well.
 
 ## Remaining limitations
 

@@ -1,4 +1,7 @@
 library(jmp2r)
+read_jmp <- function(...) jmp2r::read_jmp(..., output = "dataset")
+read_jrp <- function(...) jmp2r::read_jrp(..., output = "dataset")
+read_jmp_file <- function(...) jmp2r::read_jmp_file(..., output = "dataset")
 # These tests validate stored-value decoding independently of import conversion.
 read_stored <- function(...) read_jmp(..., missing_codes = FALSE, factors = FALSE)
 read_stored_file <- function(...) read_jmp_file(..., missing_codes = FALSE, factors = FALSE)

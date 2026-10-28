@@ -1,4 +1,7 @@
 library(jmp2r)
+read_jmp <- function(...) jmp2r::read_jmp(..., output = "dataset")
+read_jrp <- function(...) jmp2r::read_jrp(..., output = "dataset")
+read_jmp_file <- function(...) jmp2r::read_jmp_file(..., output = "dataset")
 read_text <- function(text, ...) {
   p <- tempfile(fileext = ".jrp")
   on.exit(unlink(p))

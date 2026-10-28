@@ -8,7 +8,8 @@ as_analysis_data(x, exclude_rows = FALSE, missing_codes = FALSE,
   factors = FALSE, ordinal_order = c("sort", "error", "appearance"))
 }
 \arguments{
-\item{x}{A \code{jmp_dataset}.}
+\item{x}{A detailed \code{jmp_dataset}, or a data frame when no additional
+conversions are requested.}
 \item{exclude_rows}{Remove rows whose known exclusion flag is true.}
 \item{missing_codes}{Convert explicitly declared missing value codes to NA.}
 \item{factors}{Convert nominal columns to factors and ordinal columns to ordered
@@ -22,6 +23,8 @@ Character sorting depends on the R locale.}
 Defaults return the imported data, including conversions already applied by
 the reader. They do not undo conversions. When requested metadata is unavailable, this
 function stops rather than guessing. Readers remove excluded rows by default;
+plain-data output can be analyzed directly. For later conversions requiring
+metadata, read with \code{output = "dataset"}.
 use \code{exclude_rows = FALSE} at import to retain them for later filtering.
 Supported binary layouts provide row flags, modeling types and literal missing
 codes. More complex properties can remain unknown, as indicated in the metadata.

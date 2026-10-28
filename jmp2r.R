@@ -1077,7 +1077,7 @@
 }
 
 .jmp_finish <- function(result, path, bytes, keep_source, metadata, exclude_rows,
-                        missing_codes, factors, ordinal_order) {
+                        missing_codes, factors, ordinal_order, output) {
   if (!is.data.frame(result$data) || length(result$columns) != ncol(result$data))
     .jmp_abort("Reader returned inconsistent column metadata.", "jmp_corrupt_error")
   if (!is.null(result$rows) && nrow(result$rows) != nrow(result$data))
@@ -1089,7 +1089,7 @@
   if (is.null(result$table)) result$table <- list()
   result <- .jmp_filter_rows(result, exclude_rows)
   result$source <- list(file = basename(path), size = length(bytes),
-                        reader = "jmp2r", version = "0.3.0", backend = "base-R")
+                        reader = "jmp2r", version = "0.4.0", backend = "base-R")
   if (keep_source) result$source$bytes <- bytes
   class(result) <- "jmp_dataset"
   converted <- .jmp_analysis_result(result, FALSE, missing_codes, factors, ordinal_order)
@@ -1099,15 +1099,27 @@
   result$table$missing_codes <- missing_codes
   result$table$factors <- factors
   result$table$ordinal_order <- ordinal_order
+  if (output == "data.frame") {
+    # Plain-data output omits archival/script metadata. Keep only import notes
+    # relevant to values and conversions, not warnings about unused features.
+    skip <- result$diagnostics$code %in% c("binary_metadata_partial", "jrp_literal_subset") |
+      startsWith(result$diagnostics$message, "Ordinal modeling type is retained, but category order is not explicit;")
+    result$diagnostics <- result$diagnostics[!skip, , drop = FALSE]
+    rownames(result$diagnostics) <- NULL
+  }
   if (nrow(result$diagnostics)) {
-    msg <- paste0("Some JMP information is unavailable or needs special handling (",
-                  nrow(result$diagnostics), " diagnostic entries). See $diagnostics. ",
-                  "The result is not a lossless semantic conversion.")
+    msg <- paste0("JMP import has ", nrow(result$diagnostics),
+                  " diagnostic entries. See jmp_metadata(result)$diagnostics.")
     if (metadata == "error")
       .jmp_abort(msg, "jmp_metadata_error", diagnostics = result$diagnostics)
     if (metadata == "warn")
       warning(structure(list(message = msg, call = NULL, diagnostics = result$diagnostics),
                         class = c("jmp_metadata_warning", "warning", "condition")))
+  }
+  if (output == "data.frame") {
+    out <- result$data
+    attr(out, "jmp_diagnostics") <- result$diagnostics
+    return(out)
   }
   result
 }
@@ -1115,8 +1127,10 @@
 read_jmp <- function(path, metadata = c("warn", "error", "quiet"),
                      keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
                      exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
-                     ordinal_order = c("sort", "error", "appearance")) {
+                     ordinal_order = c("sort", "error", "appearance"),
+                     output = c("data.frame", "dataset")) {
   metadata <- match.arg(metadata)
+  output <- match.arg(output)
   ordinal_order <- match.arg(ordinal_order)
   missing_codes <- .jmp_flag(missing_codes, "missing_codes")
   factors <- .jmp_flag(factors, "factors")
@@ -1127,14 +1141,16 @@ read_jmp <- function(path, metadata = c("warn", "error", "quiet"),
   bytes <- .jmp_read_bytes(path, max_bytes)
   result <- .read_jmp_binary(bytes, max_cells = max_cells)
   .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows,
-              missing_codes, factors, ordinal_order)
+              missing_codes, factors, ordinal_order, output)
 }
 
 read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
                      keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
                      exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
-                     ordinal_order = c("sort", "error", "appearance")) {
+                     ordinal_order = c("sort", "error", "appearance"),
+                     output = c("data.frame", "dataset")) {
   metadata <- match.arg(metadata)
+  output <- match.arg(output)
   ordinal_order <- match.arg(ordinal_order)
   missing_codes <- .jmp_flag(missing_codes, "missing_codes")
   factors <- .jmp_flag(factors, "factors")
@@ -1155,7 +1171,7 @@ read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
   Encoding(text) <- "UTF-8"
   result <- .read_jrp_text(text, max_cells = max_cells)
   .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows,
-              missing_codes, factors, ordinal_order)
+              missing_codes, factors, ordinal_order, output)
 }
 
 read_jmp_file <- function(path, ...) {
@@ -1167,8 +1183,10 @@ read_jmp_file <- function(path, ...) {
 }
 
 jmp_metadata <- function(x) {
+  if (is.data.frame(x) && !is.null(attr(x, "jmp_diagnostics", exact = TRUE)))
+    return(list(diagnostics = attr(x, "jmp_diagnostics", exact = TRUE)))
   if (!inherits(x, "jmp_dataset"))
-    .jmp_abort("'x' must be a jmp_dataset.", "jmp_argument_error")
+    .jmp_abort("'x' must be a jmp2r data frame or jmp_dataset.", "jmp_argument_error")
   x[c("columns", "rows", "table", "scripts", "diagnostics", "source")]
 }
 
@@ -1193,6 +1211,16 @@ as.data.frame.jmp_dataset <- function(x, row.names = NULL, optional = FALSE, ...
 as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
                              factors = FALSE,
                              ordinal_order = c("sort", "error", "appearance")) {
+  if (is.data.frame(x)) {
+    exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
+    missing_codes <- .jmp_flag(missing_codes, "missing_codes")
+    factors <- .jmp_flag(factors, "factors")
+    if (exclude_rows || missing_codes || factors)
+      .jmp_abort(paste0("A data frame is already the imported data; further JMP conversions require ",
+                       "reading with output = 'dataset' or setting conversion options at import."),
+                 "jmp_metadata_error")
+    return(x)
+  }
   .jmp_analysis_result(x, exclude_rows, missing_codes, factors,
                        match.arg(ordinal_order))$data
 }

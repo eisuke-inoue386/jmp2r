@@ -1,3 +1,13 @@
+# jmp2r 0.4.0
+
+- Readers return a standard data frame by default. Use the returned object
+  directly with `names`, `nrow`, `View`, formulas and other R functions.
+- Use `output = "dataset"` for the earlier detailed list and `$data` interface.
+- Plain-data output omits original bytes and detailed column/table/script
+  metadata. It suppresses notes about unused unsupported features, while
+  retaining conversion/representation diagnostics via `jmp_metadata(x)`.
+- Exclusion, NA conversion and nominal/ordinal factor defaults are unchanged.
+
 # jmp2r 0.3.0
 
 - Readers default to missing-code conversion to NA, nominal factors and ordinal
