@@ -1,0 +1,20 @@
+jmp2r binary parsing is derived from the following MIT-licensed implementations:
+
+jmp-convert
+Copyright (c) 2026 David Mathers
+https://github.com/davidmathers/jmp-convert
+Source revision: 5024c5aba8be0cbfaa21e5a3be85cd9f8a33c3fc
+Full license: LICENSES/jmp-convert-MIT.txt
+
+JMPReader.jl
+Copyright (C) 2024 Jaakko Ruohio
+https://github.com/jaakkor2/JMPReader.jl
+Source revision: 9fd68aa2651a8dde002ecdbd06af4d8d832b18f2
+Full license: LICENSES/JMPReader-MIT.txt
+
+The files in extdata/upstream originate from JMPReader.jl and were distributed
+in jmp-convert's MIT-licensed fixture suite. They are small synthetic test data.
+Their expected values inform the binary regression tests.
+
+JMP is a trademark of JMP Statistical Discovery LLC. jmp2r is not affiliated
+with or endorsed by JMP or SAS. No JMP application or proprietary SDK is bundled.

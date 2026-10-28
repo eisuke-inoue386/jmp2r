@@ -1,0 +1,37 @@
+name: R-CMD-check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Build source package
+        shell: Rscript {0}
+        run: |
+          status <- system2(file.path(R.home("bin"), "R"), c("CMD", "build", "--no-build-vignettes", "."))
+          if (status != 0L) stop("R CMD build failed")
+      - name: Check package and tests
+        shell: Rscript {0}
+        run: |
+          pkg <- list.files(pattern = "^jmp2r_.*[.]tar[.]gz$")
+          stopifnot(length(pkg) == 1L)
+          status <- system2(file.path(R.home("bin"), "R"), c("CMD", "check", "--no-manual", "--as-cran", pkg))
+          if (status != 0L) stop("R CMD check failed")
+          log <- readLines("jmp2r.Rcheck/00check.log", warn = FALSE)
+          if (any(grepl("Status:.*(ERROR|WARNING)", log))) stop("Check returned errors or warnings")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: check-${{ matrix.os }}
+          path: jmp2r.Rcheck

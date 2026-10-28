@@ -1,0 +1,22 @@
+// Literal embedded table example for jmp2r. No report commands are executed.
+Names Default To Here(1);
+dt = New Table("Embedded example",
+  Add Rows(3),
+  New Column("score", Numeric, "Continuous", Format("Best", 12),
+    Set Property("Units", "points"),
+    Set Property("Missing Value Codes", {-99}),
+    Values([10, -99, 30])
+  ),
+  New Column("group", Numeric, "Nominal",
+    Set Property("Value Labels", {1 = "Control", 2 = "Treatment"}),
+    Values([1, 2, 1])
+  ),
+  New Column("severity", Character, "Ordinal",
+    Set Property("Value Order", {"low", "medium", "high"}),
+    Values({"low", "high", "medium"})
+  ),
+  New Column("double score", Numeric, "Continuous",
+    Formula(:score * 2),
+    Values([20, -198, 60])
+  )
+);

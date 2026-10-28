@@ -1,0 +1,9 @@
+^\.git$
+^\.github$
+^\.gitignore$
+^README\.ja\.md$
+^PUBLISHING\.md$
+^VALIDATION\.md$
+^LICENSE\.md$
+^jmp2r_.*\.(tar\.gz|zip)$
+^.*\.Rcheck$

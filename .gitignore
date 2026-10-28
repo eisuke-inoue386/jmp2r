@@ -1,0 +1,9 @@
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rcheck/
+jmp2r_*.tar.gz
+jmp2r_*.zip
+.DS_Store
+Thumbs.db

@@ -1,0 +1,24 @@
+Package: jmp2r
+Type: Package
+Title: Read JMP Data Tables Without JMP
+Version: 0.1.0
+Authors@R: c(
+    person("jmp2r contributors", role = "aut"),
+    person("eisuke-inoue386", role = "cre",
+           email = "262287482+eisuke-inoue386@users.noreply.github.com"),
+    person("David", "Mathers", role = c("ctb", "cph")),
+    person("Jaakko", "Ruohio", role = c("ctb", "cph")))
+Description: Reads supported binary JMP data tables using base R, without
+    requiring JMP, Python, Julia, or a compiler. Preserves decoded column
+    metadata and original source bytes, and reports information that could
+    not be interpreted. Also reads a deliberately restricted literal subset
+    of embedded-data JRP scripts without executing code. External references
+    and dynamic scripts are rejected. The undocumented binary reader is
+    derived from the MIT-licensed JMPReader.jl and jmp-convert projects.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports: utils
+NeedsCompilation: no
+URL: https://github.com/eisuke-inoue386/jmp2r
+BugReports: https://github.com/eisuke-inoue386/jmp2r/issues
