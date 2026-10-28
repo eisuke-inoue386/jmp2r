@@ -34,13 +34,10 @@ remotes::install_github("eisuke-inoue386/jmp2r")
 
 ## Use without installation
 
-Load the three R source files directly from GitHub, in a fresh R session:
+Load the standalone file directly from GitHub, in a fresh R session:
 
 ```r
-base_url <- "https://raw.githubusercontent.com/eisuke-inoue386/jmp2r/main/R/"
-for (f in c("binary.R", "jrp.R", "read.R")) {
-  source(paste0(base_url, f), encoding = "UTF-8")
-}
+source("https://raw.githubusercontent.com/eisuke-inoue386/jmp2r/main/jmp2r.R", encoding = "UTF-8")
 x <- read_jmp_file(file.choose())
 x$data
 x$diagnostics
@@ -51,6 +48,14 @@ locally and are not uploaded. Repeat the loading step after restarting R.
 For reproducible use, replace `main` in the URL with a reviewed commit SHA.
 When using this method, omit `library(jmp2r)`; `system.file(..., package =
 "jmp2r")` examples below require package installation instead.
+
+`jmp2r.R` contains the reader itself; it does not fetch additional source files.
+You can save this file locally and use `source("jmp2r.R", encoding = "UTF-8")`
+offline. It is generated from the package's `R/` files, with licenses included;
+CI checks that both distributions stay in sync. As with other `source()` calls,
+the code executes in R and defines functions in your working environment.
+Only source code you trust. Re-sourcing `main` retrieves the latest version;
+use a commit SHA or a saved copy to keep a fixed version.
 
 ## Read a table
 

@@ -13,6 +13,18 @@ Repository: https://github.com/eisuke-inoue386/jmp2r
 
 ## Check and release
 
+After editing `R/`, regenerate the standalone distribution and commit it:
+
+```sh
+Rscript tools/build-standalone.R
+Rscript tools/build-standalone.R --check
+Rscript --vanilla tools/check-standalone.R
+```
+
+Edit `R/` rather than `jmp2r.R`. The generated file includes license notices
+and can be sourced without installing the package or downloading other files.
+CI rejects an outdated generated file and checks standalone use on each OS.
+
 The included workflow checks Windows, macOS and Linux on pushes and pull
 requests. Confirm those jobs pass before tagging a release. Local validation
 alone does not substitute for those platform checks.

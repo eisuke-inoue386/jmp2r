@@ -34,13 +34,10 @@ remotes::install_github("eisuke-inoue386/jmp2r")
 
 ## インストールせずに使う
 
-新しいRセッションで、GitHub上の3つのRファイルを読み込みます。
+新しいRセッションで、GitHub上の単一ファイルを1行で読み込みます。
 
 ```r
-base_url <- "https://raw.githubusercontent.com/eisuke-inoue386/jmp2r/main/R/"
-for (f in c("binary.R", "jrp.R", "read.R")) {
-  source(paste0(base_url, f), encoding = "UTF-8")
-}
+source("https://raw.githubusercontent.com/eisuke-inoue386/jmp2r/main/jmp2r.R", encoding = "UTF-8")
 x <- read_jmp_file(file.choose())
 x$data
 x$diagnostics
@@ -51,6 +48,15 @@ x$diagnostics
 同じ版を使い続けるには、URLの`main`を確認済みのコミットSHAに置き換えます。
 この方法では`library(jmp2r)`は不要です。以下の`system.file(..., package = "jmp2r")`
 による同梱サンプルの取得にはパッケージのインストールが必要です。
+
+`jmp2r.R`には読み取り関数の本体を含み、追加のコードはダウンロードしません。
+この1ファイルを手元に保存すれば、`source("jmp2r.R", encoding = "UTF-8")`
+でオフラインでも使えます。開発用の`R/`からライセンス表記も含めて生成し、
+自動テストで更新漏れを検出します。
+
+通常の`source()`と同様、Rコードを実行し、作業環境に関数を定義します。
+信頼できるコードを読み込んでください。同名の関数があれば上書きされます。
+`main`は更新されるため、同じ版を使うにはコミットSHAの指定かローカル保存を使います。
 
 ## 引き継ぐ情報と現時点の限界
 

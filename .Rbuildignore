@@ -1,6 +1,9 @@
 ^\.git$
 ^\.github$
 ^\.gitignore$
+^\.gitattributes$
+^jmp2r\.R$
+^tools$
 ^README\.ja\.md$
 ^PUBLISHING\.md$
 ^VALIDATION\.md$

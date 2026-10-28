@@ -16,6 +16,14 @@ jobs:
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
+      - name: Check standalone distribution
+        shell: Rscript {0}
+        run: |
+          rscript <- file.path(R.home("bin"), "Rscript")
+          for (args in list(c("--vanilla", "tools/build-standalone.R", "--check"),
+                            c("--vanilla", "tools/check-standalone.R"))) {
+            if (system2(rscript, args) != 0L) stop("Standalone check failed")
+          }
       - name: Build source package
         shell: Rscript {0}
         run: |
