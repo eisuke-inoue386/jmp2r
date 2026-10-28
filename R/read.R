@@ -76,7 +76,8 @@
   result
 }
 
-.jmp_finish <- function(result, path, bytes, keep_source, metadata, exclude_rows) {
+.jmp_finish <- function(result, path, bytes, keep_source, metadata, exclude_rows,
+                        missing_codes, factors, ordinal_order) {
   if (!is.data.frame(result$data) || length(result$columns) != ncol(result$data))
     .jmp_abort("Reader returned inconsistent column metadata.", "jmp_corrupt_error")
   if (!is.null(result$rows) && nrow(result$rows) != nrow(result$data))
@@ -88,9 +89,16 @@
   if (is.null(result$table)) result$table <- list()
   result <- .jmp_filter_rows(result, exclude_rows)
   result$source <- list(file = basename(path), size = length(bytes),
-                        reader = "jmp2r", version = "0.2.0", backend = "base-R")
+                        reader = "jmp2r", version = "0.3.0", backend = "base-R")
   if (keep_source) result$source$bytes <- bytes
   class(result) <- "jmp_dataset"
+  converted <- .jmp_analysis_result(result, FALSE, missing_codes, factors, ordinal_order)
+  result$data <- converted$data
+  result$columns <- converted$columns
+  result$diagnostics <- converted$diagnostics
+  result$table$missing_codes <- missing_codes
+  result$table$factors <- factors
+  result$table$ordinal_order <- ordinal_order
   if (nrow(result$diagnostics)) {
     msg <- paste0("Some JMP information is unavailable or needs special handling (",
                   nrow(result$diagnostics), " diagnostic entries). See $diagnostics. ",
@@ -106,21 +114,30 @@
 
 read_jmp <- function(path, metadata = c("warn", "error", "quiet"),
                      keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
-                     exclude_rows = TRUE) {
+                     exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
+                     ordinal_order = c("sort", "error", "appearance")) {
   metadata <- match.arg(metadata)
+  ordinal_order <- match.arg(ordinal_order)
+  missing_codes <- .jmp_flag(missing_codes, "missing_codes")
+  factors <- .jmp_flag(factors, "factors")
   exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
   max_cells <- .jmp_limit(max_cells, "max_cells")
   bytes <- .jmp_read_bytes(path, max_bytes)
   result <- .read_jmp_binary(bytes, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows,
+              missing_codes, factors, ordinal_order)
 }
 
 read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
                      keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
-                     exclude_rows = TRUE) {
+                     exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
+                     ordinal_order = c("sort", "error", "appearance")) {
   metadata <- match.arg(metadata)
+  ordinal_order <- match.arg(ordinal_order)
+  missing_codes <- .jmp_flag(missing_codes, "missing_codes")
+  factors <- .jmp_flag(factors, "factors")
   exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   keep_source <- .jmp_flag(keep_source, "keep_source")
   max_bytes <- .jmp_limit(max_bytes, "max_bytes")
@@ -137,7 +154,8 @@ read_jrp <- function(path, metadata = c("warn", "error", "quiet"),
     .jmp_abort("JRP text is not valid UTF-8.", "jrp_syntax_error")
   Encoding(text) <- "UTF-8"
   result <- .read_jrp_text(text, max_cells = max_cells)
-  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows)
+  .jmp_finish(result, path, bytes, keep_source, metadata, exclude_rows,
+              missing_codes, factors, ordinal_order)
 }
 
 read_jmp_file <- function(path, ...) {
@@ -173,13 +191,21 @@ as.data.frame.jmp_dataset <- function(x, row.names = NULL, optional = FALSE, ...
 }
 
 as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
-                             factors = FALSE) {
+                             factors = FALSE,
+                             ordinal_order = c("sort", "error", "appearance")) {
+  .jmp_analysis_result(x, exclude_rows, missing_codes, factors,
+                       match.arg(ordinal_order))$data
+}
+
+.jmp_analysis_result <- function(x, exclude_rows, missing_codes, factors, ordinal_order) {
   if (!inherits(x, "jmp_dataset"))
     .jmp_abort("'x' must be a jmp_dataset.", "jmp_argument_error")
   exclude_rows <- .jmp_flag(exclude_rows, "exclude_rows")
   missing_codes <- .jmp_flag(missing_codes, "missing_codes")
   factors <- .jmp_flag(factors, "factors")
   d <- x$data
+  columns <- x$columns
+  diagnostics <- x$diagnostics
   kept <- rep(TRUE, nrow(d))
   if (exclude_rows) {
     if (is.null(x$rows) || is.null(x$rows$excluded) || anyNA(x$rows$excluded))
@@ -192,20 +218,23 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
   }
   for (i in seq_along(d)) {
     m <- x$columns[[i]]
+    stored <- if (!is.null(m$stored_values)) m$stored_values[kept] else d[[i]]
     if (missing_codes) {
       if (!.jmp_known(m, "missing_value_codes"))
         .jmp_abort(paste0("Missing-value definitions are unavailable for column '",
                            names(d)[i], "'."), "jmp_metadata_error")
       codes <- m$missing_value_codes
       if (length(codes)) {
-        stored <- d[[i]]
+        code_values <- stored
         if (!is.null(m$raw_values)) {
           if (length(m$raw_values) != nrow(x$data))
             .jmp_abort("Stored values do not align with the data rows.", "jmp_metadata_error")
-          stored <- m$raw_values[kept]
+          code_values <- m$raw_values[kept]
         }
-        d[[i]][stored %in% codes] <- NA
+        d[[i]][code_values %in% codes] <- NA
+        m$stored_values <- stored
       }
+      m$missing_codes_applied <- TRUE
     }
     if (factors) {
       if (!.jmp_known(m, "modeling_type") || length(m$modeling_type) != 1L ||
@@ -213,24 +242,40 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
         .jmp_abort(paste0("Modeling type is unavailable for column '", names(d)[i], "'."),
                    "jmp_metadata_error")
       kind <- tolower(m$modeling_type)
-      if (!kind %in% c("continuous", "nominal", "ordinal"))
+      if (!kind %in% c("continuous", "nominal", "ordinal", "rowstate", "none"))
         .jmp_abort(paste0("Unsupported modeling type: ", m$modeling_type),
                    "jmp_metadata_error")
       if (kind %in% c("nominal", "ordinal")) {
         if (!.jmp_known(m, "value_order") || !.jmp_known(m, "value_labels"))
           .jmp_abort(paste0("Category metadata is unavailable for column '",
                              names(d)[i], "'."), "jmp_metadata_error")
+        values <- stored
+        # Keep previously converted missing values missing when conversion is
+        # requested again; labels are never treated as the original codes.
+        values[is.na(d[[i]])] <- NA
         lev <- m$value_order
+        order_source <- "jmp"
         if (!length(lev)) {
-          if (kind == "ordinal")
+          if (kind == "ordinal" && ordinal_order == "error")
             .jmp_abort(paste0("Ordinal column '", names(d)[i],
-                               "' has no explicit Value Order; an order will not be guessed."),
-                       "jmp_metadata_error")
-          lev <- unique(d[[i]][!is.na(d[[i]])])
+                               "' has no explicit Value Order."), "jmp_metadata_error")
+          lev <- unique(values[!is.na(values)])
+          if (kind == "ordinal" && ordinal_order == "sort") {
+            lev <- sort(lev)
+            order_source <- "r_sort"
+          } else order_source <- "first_appearance"
+          if (kind == "ordinal") diagnostics <- rbind(diagnostics, data.frame(
+            code = "ordinal_order_inferred", scope = names(d)[i],
+            message = if (ordinal_order == "sort")
+              "No explicit JMP category order; ordered factor uses R's standard sorted order (character order depends on the R locale)."
+            else "No explicit JMP category order; ordered factor uses first appearance in the returned data.",
+            stringsAsFactors = FALSE))
         }
+        if (isTRUE(m$missing_codes_applied) && length(m$missing_value_codes))
+          lev <- lev[!lev %in% m$missing_value_codes]
         if (anyNA(lev) || anyDuplicated(lev))
           .jmp_abort("Category levels must be unique and non-missing.", "jmp_metadata_error")
-        observed <- unique(d[[i]][!is.na(d[[i]])])
+        observed <- unique(values[!is.na(values)])
         if (any(!observed %in% lev))
           .jmp_abort(paste0("Value Order omits observed values in column '", names(d)[i], "'."),
                      "jmp_metadata_error")
@@ -245,9 +290,14 @@ as_analysis_data <- function(x, exclude_rows = FALSE, missing_codes = FALSE,
         if (anyNA(labels) || anyDuplicated(labels))
           .jmp_abort("Category labels would merge distinct stored values; conversion stopped.",
                      "jmp_metadata_error")
-        d[[i]] <- factor(d[[i]], levels = lev, labels = labels, ordered = kind == "ordinal")
+        d[[i]] <- factor(values, levels = lev, labels = labels, ordered = kind == "ordinal")
+        m$stored_values <- stored
+        m$r_levels <- lev
+        m$r_level_labels <- labels
+        m$r_level_order_source <- order_source
       }
     }
+    columns[[i]] <- m
   }
-  d
+  list(data = d, columns = columns, diagnostics = diagnostics)
 }

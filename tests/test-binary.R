@@ -1,9 +1,12 @@
 library(jmp2r)
+# These tests validate stored-value decoding independently of import conversion.
+read_stored <- function(...) read_jmp(..., missing_codes = FALSE, factors = FALSE)
+read_stored_file <- function(...) read_jmp_file(..., missing_codes = FALSE, factors = FALSE)
 
 # Real JMP files and expected values originate in JMPReader.jl's MIT test suite.
 fixture_dir <- system.file("extdata", "upstream", package = "jmp2r")
 stopifnot(nzchar(fixture_dir))
-read_fixture <- function(name) read_jmp(file.path(fixture_dir, name), metadata = "quiet")
+read_fixture <- function(name) read_stored(file.path(fixture_dir, name), metadata = "quiet")
 expect_error_class <- function(expr, cls) {
   error <- tryCatch({ force(expr); NULL }, error = identity)
   stopifnot(inherits(error, cls))
@@ -14,7 +17,7 @@ internal <- function(n) getFromNamespace(n, "jmp2r")
 files <- list.files(fixture_dir, "\\.jmp$", full.names = TRUE)
 stopifnot(length(files) >= 19L)
 for (f in files) {
-  x <- read_jmp(f, metadata = "quiet")
+  x <- read_stored(f, metadata = "quiet")
   stopifnot(inherits(x, "jmp_dataset"), ncol(x$data) == length(x$columns),
             all(lengths(x$data) == nrow(x$data)), nrow(x$rows) == nrow(x$data),
             !any(x$rows$excluded),
@@ -132,7 +135,7 @@ negative_rows <- single
 dimension_start <- internal(".jmp_find")(single,as.raw(c(7,0,8,0,0,0))) - 32
 negative_rows[dimension_start + 1:8] <- as.raw(255)
 expect_error_class(internal(".read_jmp_binary")(negative_rows), "jmp_limit_error")
-expect_error_class(read_jmp(file.path(fixture_dir,"example1.jmp"),max_cells=2), "jmp_limit_error")
+expect_error_class(read_stored(file.path(fixture_dir,"example1.jmp"),max_cells=2), "jmp_limit_error")
 expect_error_class(internal(".jmp_utf8")(as.raw(c(255,254))), "jmp_encoding_error")
 expect_error_class(internal(".jmp_gunzip")(raw(),1025,1024), "jmp_limit_error")
 expect_error_class(internal(".jmp_gunzip")(charToRaw("abcdef"),6,1024), "jmp_corrupt_error")

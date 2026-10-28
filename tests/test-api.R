@@ -1,4 +1,7 @@
 library(jmp2r)
+# These tests validate stored-value decoding independently of import conversion.
+read_stored <- function(...) read_jmp(..., missing_codes = FALSE, factors = FALSE)
+read_stored_file <- function(...) read_jmp_file(..., missing_codes = FALSE, factors = FALSE)
 
 expect_error_class <- function(expr, class) {
   e <- tryCatch(force(expr), error = identity)
@@ -7,27 +10,27 @@ expect_error_class <- function(expr, class) {
 }
 path <- system.file("extdata", "upstream", "example1.jmp", package = "jmp2r")
 warned <- FALSE
-x <- withCallingHandlers(read_jmp(path), jmp_metadata_warning = function(w) {
+x <- withCallingHandlers(read_stored(path), jmp_metadata_warning = function(w) {
   warned <<- TRUE
   invokeRestart("muffleWarning")
 })
 stopifnot(warned, inherits(x, "jmp_dataset"), nrow(x$data) == 4L,
           is.raw(x$source$bytes), identical(as.data.frame(x), x$data),
           identical(as_analysis_data(x), x$data))
-expect_error_class(read_jmp(path, metadata = "error"), "jmp_metadata_error")
-expect_error_class(read_jmp(path, max_bytes = 10), "jmp_resource_error")
-expect_error_class(read_jmp(path, max_cells = 0), "jmp_argument_error")
-expect_error_class(read_jmp(path, keep_source = NA), "jmp_argument_error")
-expect_error_class(read_jmp("https://example.invalid/data.jmp"), "jmp_argument_error")
-expect_error_class(read_jmp("a-file-that-does-not-exist.jmp"), "jmp_io_error")
-expect_error_class(read_jmp_file("wrong.txt"), "jmp_argument_error")
-expect_error_class(read_jmp_file(character()), "jmp_argument_error")
+expect_error_class(read_stored(path, metadata = "error"), "jmp_metadata_error")
+expect_error_class(read_stored(path, max_bytes = 10), "jmp_resource_error")
+expect_error_class(read_stored(path, max_cells = 0), "jmp_argument_error")
+expect_error_class(read_stored(path, keep_source = NA), "jmp_argument_error")
+expect_error_class(read_stored("https://example.invalid/data.jmp"), "jmp_argument_error")
+expect_error_class(read_stored("a-file-that-does-not-exist.jmp"), "jmp_io_error")
+expect_error_class(read_stored_file("wrong.txt"), "jmp_argument_error")
+expect_error_class(read_stored_file(character()), "jmp_argument_error")
 stopifnot(identical(as_analysis_data(x, exclude_rows = TRUE), x$data))
-expect_error_class(read_jmp(path, exclude_rows = NA), "jmp_argument_error")
+expect_error_class(read_stored(path, exclude_rows = NA), "jmp_argument_error")
 expect_error_class(as_analysis_data(x, factors = TRUE), "jmp_metadata_error")
 expect_error_class(as_analysis_data(x, missing_codes = TRUE), "jmp_metadata_error")
-stopifnot(is.null(read_jmp(path, metadata = "quiet", keep_source = FALSE)$source$bytes))
-stopifnot(identical(read_jmp_file(path, metadata = "quiet")$data, x$data))
+stopifnot(is.null(read_stored(path, metadata = "quiet", keep_source = FALSE)$source$bytes))
+stopifnot(identical(read_stored_file(path, metadata = "quiet")$data, x$data))
 unknown_rows <- x
 unknown_rows$rows <- NULL
 expect_error_class(as_analysis_data(unknown_rows, exclude_rows = TRUE), "jmp_metadata_error")

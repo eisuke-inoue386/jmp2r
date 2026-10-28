@@ -3,7 +3,7 @@
 JMPをインストールせずに、`.jmp`を直接Rへ読み込むパッケージです。
 Python・Julia・コンパイラも不要です。R 4.1以上で利用できます。
 
-**0.2.0は実験版です。すべてのJMPファイルや全メタデータの解釈には対応していません。**
+**0.3.0は実験版です。すべてのJMPファイルや全メタデータの解釈には対応していません。**
 取得できない情報は`diagnostics`に表示します。データの値を読み取れない場合は
 欠測値でごまかさずエラーにします。
 
@@ -11,10 +11,10 @@ Python・Julia・コンパイラも不要です。R 4.1以上で利用できま�
 
 ```r
 # 配布されたソースパッケージを指定
-install.packages("jmp2r_0.2.0.tar.gz", repos = NULL, type = "source")
+install.packages("jmp2r_0.3.0.tar.gz", repos = NULL, type = "source")
 
 # Windows版を使う場合はこちら
-# install.packages("jmp2r_0.2.0.zip", repos = NULL, type = "win.binary")
+# install.packages("jmp2r_0.3.0.zip", repos = NULL, type = "win.binary")
 
 library(jmp2r)
 x <- read_jmp("data.jmp")
@@ -80,8 +80,28 @@ x <- read_jmp_file("data.jmp", exclude_rows = FALSE)
 日時変換前の元の数値も列情報に残します。空文字列は`""`のまま保持します。
 
 対応形式では、**連続／名義／順序の尺度、リテラルで定義した欠測コード・カテゴリ順序、
-行の除外・非表示・選択・ラベル状態**を取得します。尺度と欠測コードは列情報に保存し、
-値の変換は`as_analysis_data()`で明示的に行います。
+行の除外・非表示・選択・ラベル状態**を取得します。
+
+0.3.0から、**欠測コードは`NA`、名義尺度は`factor`、順序尺度は`ordered factor`に
+読み込み時に変換します**。`missing_codes = TRUE`と`factors = TRUE`が既定値です。
+欠測コードの変換を先に行い、欠測コードをカテゴリ水準として残さないようにします。
+連続尺度の列は数値・日付などの型を保持します。
+
+```r
+x <- read_jmp_file("data.jmp")  # x$data は変換済み
+raw <- read_jmp_file("data.jmp", missing_codes = FALSE, factors = FALSE)
+```
+
+JMPで明示したカテゴリ順を優先します。順序尺度で順序が未指定なら、既定の
+`ordinal_order = "sort"`でRの標準順を使い、`ordinal_order_inferred`として診断情報に
+記録します。数値は昇順、文字列の並びはRのロケールに依存します。
+`ordinal_order = "error"`なら順序未指定時にエラー、`"appearance"`なら出現順にできます。
+名義尺度で明示順がない場合は出現順です。
+
+変換前の値は`x$columns[[i]]$stored_values`に、元の尺度・欠測コードの定義も列情報に
+保持します。`r_levels`、`r_level_labels`、`r_level_order_source`でRの水準と決定方法を
+確認できます。必要なメタデータが取得できない場合は、quietでも変換を止めます。
+その変換をオフにすると元の値を読み込めます。
 
 一方、**単位、計算式、テーブルスクリプト、複雑な列プロパティは完全には解釈できません**。
 取得できたかは各列の`metadata_known`で区別します。元ファイルのバイト列は既定で
@@ -120,10 +140,10 @@ d <- as_analysis_data(x, exclude_rows = TRUE,
 ```
 
 指定した処理に必要な情報が不明なら、推測せずエラーにします。
-除外行は通常すでに読み込み時に取り除かれています。欠測コードだけを適用する場合は
-`as_analysis_data(x, missing_codes = TRUE)`とします。元の`x$data`は変更しません。
-順序尺度の`ordered factor`への変換には明示的な`Value Order`が必要です。
-順序の指定がない場合、尺度の情報は保持しますが、カテゴリ順は推測せず変換を止めます。
+通常は読み込み時に除外・欠測コード・factor変換が適用されています。
+`as_analysis_data()`は、読み込み時にオフにした変換を後から行う際に使えます。
+再変換時も元のコードを使い、値ラベルを元の値として誤って再解釈しません。
+元の`x$data`は変更しません。FALSE指定は、すでに行った変換を元に戻す操作ではありません。
 
 通常のR関数はJMPの除外フラグや尺度を自動では認識しません。
 `x$data`を分析する場合は、`x$diagnostics`も確認してください。

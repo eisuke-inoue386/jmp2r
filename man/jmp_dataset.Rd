@@ -17,14 +17,14 @@ jmp_metadata(x)
 }
 \value{\code{jmp_metadata()} returns metadata components as a list.
 \code{as.data.frame()} returns the data already filtered according to the
-reader's \code{exclude_rows} option, without further transformations.
+reader's options (exclusion, missing codes and factors), without further transformations.
 \code{print()} returns its input invisibly.}
 \details{Column metadata is indexed by position, even when names are duplicated.
 The \code{metadata_known} flags distinguish unavailable information from
 known-absent properties. Keep the whole object with \code{saveRDS()} to preserve
 metadata and original bytes; a CSV export cannot preserve all these components.}
 \examples{
-x <- read_jmp(system.file("extdata", "upstream", "example1.jmp",
+x <- read_jmp(system.file("extdata", "upstream", "compressed.jmp",
                          package = "jmp2r"), metadata = "quiet")
 nrow(as.data.frame(x))
 names(jmp_metadata(x))

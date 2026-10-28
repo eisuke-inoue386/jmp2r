@@ -4,7 +4,7 @@ Read supported JMP `.jmp` data tables directly in R, without JMP, Python,
 Julia, or a compiler. Includes a **non-executing, restricted** reader for
 literal embedded tables in `.jrp` files.
 
-**Experimental 0.2.0.** The binary format is undocumented. This is not an
+**Experimental 0.3.0.** The binary format is undocumented. This is not an
 official JMP product, a universal JMP reader, or a lossless semantic converter.
 See [日本語の説明](README.ja.md), [validation](VALIDATION.md), and
 [publication instructions](PUBLISHING.md).
@@ -16,13 +16,13 @@ R 4.1 or newer is required. The package has no third-party R dependencies.
 From the supplied source archive:
 
 ```r
-install.packages("jmp2r_0.2.0.tar.gz", repos = NULL, type = "source")
+install.packages("jmp2r_0.3.0.tar.gz", repos = NULL, type = "source")
 ```
 
 On Windows, the supplied R binary package can also be installed:
 
 ```r
-install.packages("jmp2r_0.2.0.zip", repos = NULL, type = "win.binary")
+install.packages("jmp2r_0.3.0.zip", repos = NULL, type = "win.binary")
 ```
 
 From GitHub:
@@ -105,6 +105,31 @@ file is not modified; `x$source$bytes`, if retained, still contains all rows.
 Unsupported exclusion metadata stops the default read even with
 `metadata = "quiet"`; opt into `exclude_rows = FALSE` to read all rows explicitly.
 
+## Missing codes and factors (default: convert)
+
+Since 0.3.0, `missing_codes = TRUE` converts defined missing codes to `NA`
+before `factors = TRUE` converts nominal columns to factors and ordinal columns
+to ordered factors. Continuous columns retain their numeric/date type.
+
+```r
+x <- read_jmp_file("my-data.jmp")  # analysis-ready data in x$data
+raw <- read_jmp_file("my-data.jmp", missing_codes = FALSE, factors = FALSE)
+```
+
+Explicit JMP category order takes precedence. Otherwise ordinal levels use R's
+standard sorted order (`ordinal_order = "sort"`), which depends on the R locale
+for text. This fallback is recorded as `ordinal_order_inferred` in diagnostics.
+Use `ordinal_order = "error"` to require explicit order, or `"appearance"` for
+first occurrence in the returned rows. Nominal levels without explicit order
+use first occurrence. Missing codes are not retained as factor levels when
+missing-code conversion is on; duplicate display labels cause an error.
+
+Converted columns retain pre-conversion values in `columns[[i]]$stored_values`,
+aligned with returned rows. Source definitions remain unchanged; `r_levels`,
+`r_level_labels` and `r_level_order_source` describe the R factor. Unknown
+metadata needed for a requested conversion stops the read, even in quiet mode.
+Disable that conversion explicitly to retain stored values instead.
+
 ## Binary `.jmp` support
 
 | Information | Current behavior |
@@ -172,19 +197,18 @@ d <- as_analysis_data(x, exclude_rows = TRUE,
                       missing_codes = TRUE, factors = TRUE)
 ```
 
-`as_analysis_data()` defaults apply no additional transformations; excluded
-rows have already been removed unless disabled at import. Requested
-transformations fail when necessary metadata is unavailable. Use
-`as_analysis_data(x, missing_codes = TRUE)` to turn known missing codes into
-`NA` while keeping the original returned values in `x$data`.
-Ordinal conversion requires explicit `Value Order`; duplicate display labels
-that would merge distinct codes cause an error. The original object is unchanged.
+`as_analysis_data()` defaults apply no additional transformations. Reader
+defaults already remove exclusions, convert missing codes, and create factors.
+This function is useful when conversions were disabled at import. It returns a
+new data frame and does not modify `x`. Repeated conversion uses preserved codes
+and does not reinterpret labels as original values; FALSE options do not undo
+earlier conversions. Unknown required metadata and duplicate labels are errors.
 
 ## Tests
 
 ```sh
 R CMD build .
-R CMD check --no-manual jmp2r_0.2.0.tar.gz
+R CMD check --no-manual jmp2r_0.3.0.tar.gz
 ```
 
 Tests use base R. The GitHub workflow runs on Windows, macOS and Linux after

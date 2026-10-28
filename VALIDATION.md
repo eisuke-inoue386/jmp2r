@@ -8,7 +8,8 @@ Publication check: 2026-10-28 (Asia/Tokyo).
 - Windows 11 x64, R 4.6.1, UTF-8 locale.
 - `R CMD build --no-build-vignettes`: passed.
 - `R CMD check --no-manual`: **Status: OK**.
-- Four test scripts cover the API, binary values, JRP, and row/column metadata.
+- Five test scripts cover the API, binary values, JRP, row/column metadata,
+  and default import conversions.
 - The Windows binary ZIP installed into a separate clean library, with MD5
   verification and public `.jmp`/`.jrp`/analysis-conversion smoke tests passing.
 - No third-party R package or JMP installation was used.
@@ -72,7 +73,20 @@ tests; the essential regression cases are included in the test suite.
   nominal/ordinal scales and a missing-code setting. The supplied table is not
   included in this repository or uploaded to GitHub. Public regression tests
   use the MIT fixtures and synthetic values only.
-- Unspecified ordinal category order remains unspecified; no order is inferred.
+- In 0.2.0, unspecified ordinal order stopped conversion. See the 0.3.0
+  behavior below; the original source order remains unchanged in metadata.
+
+## 0.3.0 default import conversion (2026-10-28)
+
+- Missing codes become NA before nominal/ordinal factor conversion by default.
+- Synthetic tests cover numeric sorting, character sorting under the R locale,
+  explicit source order, appearance/strict options, value labels, duplicate
+  labels, empty columns, all-missing columns, opt-outs and repeated conversion.
+- Original values/codes are preserved separately from display labels; inferred
+  R order is diagnosed separately from the declared JMP order.
+- The local owner-supplied table was rechecked for nominal factors, an ordered
+  factor using R sorting, and conversion of the declared missing code to NA.
+  The file remains local and is not part of the public test suite.
 
 ## Remaining limitations
 

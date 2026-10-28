@@ -8,11 +8,13 @@ subset of embedded-data JRP scripts. No JSL is executed.}
 \usage{
 read_jmp(path, metadata = c("warn", "error", "quiet"),
   keep_source = TRUE, max_bytes = 512 * 1024^2, max_cells = 1e7,
-  exclude_rows = TRUE)
+  exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
+  ordinal_order = c("sort", "error", "appearance"))
 
 read_jrp(path, metadata = c("warn", "error", "quiet"),
   keep_source = TRUE, max_bytes = 16 * 1024^2, max_cells = 1e7,
-  exclude_rows = TRUE)
+  exclude_rows = TRUE, missing_codes = TRUE, factors = TRUE,
+  ordinal_order = c("sort", "error", "appearance"))
 
 read_jmp_file(path, ...)
 }
@@ -29,6 +31,14 @@ Unknown exclusion metadata causes an error even with quiet diagnostics.
 Set FALSE explicitly to retain all stored rows. Hidden or selected rows alone
 are not removed. Original source bytes, when kept, still contain all rows.}
 \item{...}{Arguments passed to \code{read_jmp()} or \code{read_jrp()}.}
+\item{missing_codes}{Convert known JMP missing codes to \code{NA} before factor
+conversion (default TRUE). Set FALSE to retain the codes as values.}
+\item{factors}{Convert nominal columns to factors and ordinal columns to ordered
+factors (default TRUE), using supported value labels. Set FALSE to retain values.}
+\item{ordinal_order}{When JMP has no explicit category order: \code{"sort"}
+uses R's standard order, \code{"appearance"} uses first occurrence in returned
+data, and \code{"error"} stops. Inferred orders are recorded in diagnostics.
+Character sorting depends on the R session's locale. Explicit JMP order wins.}
 }
 \value{A \code{jmp_dataset} list containing \code{data} (a data frame),
 \code{columns} (a list in column order), \code{rows}, \code{table},
@@ -49,16 +59,21 @@ Excluded rows are removed at import by default. \code{rows$row_id} maps each
 returned row to its original one-based position; \code{table$source_nrows},
 \code{table$returned_nrows} and \code{table$excluded_rows_removed} record the
 filtering. Per-row interpreted column metadata stays aligned with returned data.
-The original file is not modified. Missing codes and modeling types are retained
-as metadata; use \code{as_analysis_data()} with explicit options to apply them.
-Ordinal conversion requires explicit category order and never guesses it.
+The original file is not modified. Missing codes become \code{NA} and nominal/
+ordinal columns become factors by default. Required but unknown metadata stops
+conversion even in quiet mode; opt out with the corresponding FALSE option.
+For converted columns, \code{columns[[i]]$stored_values} retains values before
+conversion, aligned with returned rows. Original missing-code definitions,
+modeling types and declared order remain in metadata. \code{r_levels},
+\code{r_level_labels} and \code{r_level_order_source} describe factor conversion.
+The source order is never overwritten by the inferred R order.
 
 Errors inherit from \code{jmp_error}; metadata warnings inherit from
 \code{jmp_metadata_warning}. Input limits bound basic allocations but are not
 a general purpose sandbox or a guarantee of a fixed peak memory usage.
 }
 \examples{
-path <- system.file("extdata", "upstream", "example1.jmp", package = "jmp2r")
+path <- system.file("extdata", "upstream", "compressed.jmp", package = "jmp2r")
 x <- read_jmp(path, metadata = "quiet")
 names(x$data)
 head(x$diagnostics)

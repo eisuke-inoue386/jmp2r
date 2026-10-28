@@ -523,7 +523,7 @@
   if (!meta$metadata_known$missing_value_codes)
     extra <- c(extra, "Missing-value definitions and value order could not be fully interpreted; no absence was assumed.")
   if (identical(meta$modeling_type, "Ordinal") && !length(meta$value_order))
-    extra <- c(extra, "Ordinal modeling type is retained, but category order is not explicit; ordered-factor conversion will not guess an order.")
+    extra <- c(extra, "Ordinal modeling type is retained, but category order is not explicit; see the ordinal_order conversion option.")
   list(values = v, metadata = meta, messages = extra)
 }
 

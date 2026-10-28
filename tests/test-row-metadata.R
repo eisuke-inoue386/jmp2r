@@ -12,7 +12,7 @@ read_bytes <- function(bytes, ...) {
   p <- tempfile(fileext = ".jmp")
   on.exit(unlink(p))
   writeBin(bytes, p)
-  read_jmp_file(p, metadata = "quiet", ...)
+  read_jmp_file(p, metadata = "quiet", missing_codes = FALSE, factors = FALSE, ...)
 }
 state_start <- function(bytes, n) {
   h <- internal(".jmp_header")(bytes, 1e7)
@@ -126,7 +126,7 @@ one$data <- x$data[2]
 one$columns <- x$columns[2]
 d <- as_analysis_data(one, missing_codes = TRUE)
 stopifnot(is.na(d[[1]][2]), !is.na(one$data[[1]][2]))
-expect_error(as_analysis_data(one, factors = TRUE), "jmp_metadata_error")
+expect_error(as_analysis_data(one, factors = TRUE, ordinal_order = "error"), "jmp_metadata_error")
 
 # Missing codes refer to stored numeric seconds, not converted Date values.
 temporal <- read_bytes(fixture("example1.jmp"), exclude_rows = FALSE)

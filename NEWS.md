@@ -1,3 +1,14 @@
+# jmp2r 0.3.0
+
+- Readers default to missing-code conversion to NA, nominal factors and ordinal
+  ordered factors. Opt out with `missing_codes = FALSE` and/or `factors = FALSE`.
+- Explicit JMP category order takes precedence. Otherwise ordinal levels use
+  R's standard sorted order, with inferred ordering recorded in diagnostics.
+  `ordinal_order = "error"` or `"appearance"` selects alternative behavior.
+- Preserve pre-conversion values and effective R levels alongside source
+  definitions. Repeated conversion does not reinterpret labels as codes.
+- Required unknown metadata stops the requested conversion, even in quiet mode.
+
 # jmp2r 0.2.0
 
 - Readers now default to `exclude_rows = TRUE`. Supported JMP table exclusion
