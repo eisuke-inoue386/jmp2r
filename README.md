@@ -4,7 +4,7 @@ Read supported JMP `.jmp` tables directly in R without JMP, Python, Julia or
 additional R packages. A restricted `.jrp` reader accepts literal embedded
 values without executing JSL. R 4.1 or newer is required.
 
-**Experimental 0.4.0.** Supported layouts are tested; this is not a universal
+**Experimental 0.4.1.** Supported layouts are tested; this is not a universal
 JMP reader or a lossless reproduction of JMP's settings. See
 [日本語の説明](README.ja.md), [validation](VALIDATION.md) and
 [publication instructions](PUBLISHING.md).
@@ -68,6 +68,10 @@ raw column properties or detailed metadata. Warnings about unused units,
 formulas and table scripts are omitted. Notes affecting interpreted data, such
 as inferred ordinal ordering or unknown datetime timezone, remain visible.
 These notes describe the import, not later edits or subsets of the data frame.
+
+Inferred ordinal order is recorded silently and does not emit a warning.
+Other warnings remain enabled. Explicit `metadata = "error"` still treats all
+notes as errors.
 
 `metadata = "quiet"` suppresses warnings while retaining the notes.
 `metadata = "error"` stops on remaining notes. Neither option permits
@@ -137,8 +141,8 @@ result <- read_jmp_file("my-data.jmp")
 ```
 
 Local source archives can be installed with
-`install.packages("jmp2r_0.4.0.tar.gz", repos = NULL, type = "source")`.
-The separately built Windows binary is `jmp2r_0.4.0.zip` (`type = "win.binary"`).
+`install.packages("jmp2r_0.4.1.tar.gz", repos = NULL, type = "source")`.
+The separately built Windows binary is `jmp2r_0.4.1.zip` (`type = "win.binary"`).
 `jmp2r-source.zip` is a source-folder archive, not an installable Windows binary.
 Package examples using `system.file(..., package = "jmp2r")` require installation.
 
@@ -146,7 +150,7 @@ Package examples using `system.file(..., package = "jmp2r")` require installatio
 
 ```sh
 R CMD build .
-R CMD check --no-manual jmp2r_0.4.0.tar.gz
+R CMD check --no-manual jmp2r_0.4.1.tar.gz
 ```
 
 Tests use base R. CI checks the package and standalone file on Windows, macOS

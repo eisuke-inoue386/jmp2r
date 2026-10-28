@@ -2,7 +2,7 @@
 
 JMPをインストールせずに、対応する`.jmp`や限定的な`.jrp`をRに読み込みます。
 R 4.1以上が必要です。Python・Julia・追加のRパッケージは不要です。
-**0.4.0は実験版です。すべてのJMPファイル・設定には対応していません。**
+**0.4.1は実験版です。すべてのJMPファイル・設定には対応していません。**
 
 ## インストールせずに使う
 
@@ -64,6 +64,9 @@ jmp_metadata(result)$diagnostics
 カテゴリ順の補完や日時のタイムゾーンなど、データの解釈に関係する注意点は残します。
 診断は読み込み時の記録であり、その後の行の絞り込みや編集を反映するものではありません。
 
+カテゴリ順をRで補ったという記録は残しますが、そのwarningは出しません。
+その他の警告は引き続き表示します。明示的な`metadata = "error"`は従来どおりです。
+
 `metadata = "quiet"`で警告表示を抑え、`"error"`で診断がある場合に停止できます。
 
 ## 従来の詳細形式を使う
@@ -113,8 +116,8 @@ library(jmp2r)
 result <- read_jmp_file("data.jmp")
 ```
 
-ローカルのソースパッケージは`jmp2r_0.4.0.tar.gz`、Windowsバイナリは
-`jmp2r_0.4.0.zip`です。`jmp2r-source.zip`はリポジトリ用ソース一式であり、
+ローカルのソースパッケージは`jmp2r_0.4.1.tar.gz`、Windowsバイナリは
+`jmp2r_0.4.1.zip`です。`jmp2r-source.zip`はリポジトリ用ソース一式であり、
 インストール用のWindowsバイナリではありません。
 
 検証は[VALIDATION.md](VALIDATION.md)、保守・公開は[PUBLISHING.md](PUBLISHING.md)を参照。

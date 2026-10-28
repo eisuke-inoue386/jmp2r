@@ -18,7 +18,7 @@ stopifnot(identical(class(x), "data.frame"),
           identical(names(x), c("data", "source", "diagnostics")),
           nrow(x) == 3L, is.na(x$data[2]), mean(x$data, na.rm = TRUE) == 2,
           is.factor(x$source), is.ordered(x$diagnostics),
-          identical(levels(x$diagnostics), c("1","2","10")), warned,
+          identical(levels(x$diagnostics), c("1","2","10")), !warned,
           identical(jmp_metadata(x)$diagnostics$code, "ordinal_order_inferred"),
           setequal(names(attributes(x)), c("names","class","row.names","jmp_diagnostics")),
           identical(as_analysis_data(x), x))

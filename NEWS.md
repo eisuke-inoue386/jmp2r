@@ -1,3 +1,10 @@
+# jmp2r 0.4.1
+
+- Inferred ordinal category order is retained in diagnostics but no longer
+  emits a warning in the default mode. Other warnings remain enabled.
+- Explicit strict modes (`metadata = "error"`, `ordinal_order = "error"`)
+  keep their existing behavior.
+
 # jmp2r 0.4.0
 
 - Readers return a standard data frame by default. Use the returned object

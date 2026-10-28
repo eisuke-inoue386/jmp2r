@@ -40,7 +40,8 @@ factors (default TRUE), using supported value labels. Set FALSE to retain values
 \item{ordinal_order}{When JMP has no explicit category order: \code{"sort"}
 uses R's standard order, \code{"appearance"} uses first occurrence in returned
 data, and \code{"error"} stops. Inferred orders are recorded in diagnostics.
-Character sorting depends on the R session's locale. Explicit JMP order wins.}
+Character sorting depends on the R session's locale. Explicit JMP order wins.
+Inferred order does not emit a warning; explicit strict modes still stop.}
 \item{output}{Default \code{"data.frame"} returns the data directly, with
 import diagnostics in an attribute accessible through \code{jmp_metadata()}.
 \code{"dataset"} returns the detailed list used by earlier versions.}

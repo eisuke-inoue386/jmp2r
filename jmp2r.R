@@ -1089,7 +1089,7 @@
   if (is.null(result$table)) result$table <- list()
   result <- .jmp_filter_rows(result, exclude_rows)
   result$source <- list(file = basename(path), size = length(bytes),
-                        reader = "jmp2r", version = "0.4.0", backend = "base-R")
+                        reader = "jmp2r", version = "0.4.1", backend = "base-R")
   if (keep_source) result$source$bytes <- bytes
   class(result) <- "jmp_dataset"
   converted <- .jmp_analysis_result(result, FALSE, missing_codes, factors, ordinal_order)
@@ -1107,13 +1107,16 @@
     result$diagnostics <- result$diagnostics[!skip, , drop = FALSE]
     rownames(result$diagnostics) <- NULL
   }
-  if (nrow(result$diagnostics)) {
-    msg <- paste0("JMP import has ", nrow(result$diagnostics),
+  reported <- result$diagnostics
+  if (metadata == "warn")
+    reported <- reported[reported$code != "ordinal_order_inferred", , drop = FALSE]
+  if (nrow(reported)) {
+    msg <- paste0("JMP import has ", nrow(reported),
                   " diagnostic entries. See jmp_metadata(result)$diagnostics.")
     if (metadata == "error")
       .jmp_abort(msg, "jmp_metadata_error", diagnostics = result$diagnostics)
     if (metadata == "warn")
-      warning(structure(list(message = msg, call = NULL, diagnostics = result$diagnostics),
+      warning(structure(list(message = msg, call = NULL, diagnostics = reported),
                         class = c("jmp_metadata_warning", "warning", "condition")))
   }
   if (output == "data.frame") {

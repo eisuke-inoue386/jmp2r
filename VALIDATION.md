@@ -100,6 +100,12 @@ tests; the essential regression cases are included in the test suite.
 - Existing decoder/conversion suites exercise `output = "dataset"` explicitly
   to verify the earlier detailed interface as well.
 
+## 0.4.1 ordinal-order notification
+
+- Default import retains inferred-order diagnostics without warning.
+- Regression tests still check inferred levels, other warning behavior, and
+  the explicitly requested strict metadata/error modes.
+
 ## Remaining limitations
 
 - macOS and Linux execution: the GitHub workflow is configured. See the
